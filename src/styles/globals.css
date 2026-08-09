@@ -1,6 +1,69 @@
 @import "tailwindcss";
 
-@theme {
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif,
-    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+/*
+ * This UI is light-only: every page hardcodes `bg-gray-50` / `bg-white` / `text-gray-900`.
+ * The `prefers-color-scheme: dark` override that create-next-app ships was flipping
+ * `--foreground` to near-white while the form fields stayed `bg-white`, which made all
+ * input text invisible on machines set to Dark mode. The palette is fixed to light instead.
+ */
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+html, body {
+  height: 100%;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/*
+ * Tailwind's preflight sets `color: inherit` on form controls, so inputs pick up whatever
+ * `body` is using. Pin them explicitly so field text stays legible no matter what the
+ * surrounding context or the OS theme does.
+ */
+input,
+select,
+textarea {
+  color: #171717;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #6b7280;
+}
+
+/* Right-anchored slide-over panels (e.g. the New Borrow Transaction form). */
+@keyframes slide-over-in {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+
+.slide-over-panel {
+  animation: slide-over-in 200ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slide-over-panel {
+    animation: none;
+  }
+}
+
+/* Chrome paints autofilled fields with its own colours; keep the text dark there too. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #171717;
+  box-shadow: 0 0 0 1000px #ffffff inset;
 }

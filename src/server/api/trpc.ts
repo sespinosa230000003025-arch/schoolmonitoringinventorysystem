@@ -8,10 +8,11 @@
  */
 
 import { initTRPC, TRPCError } from "@trpc/server";
+import { getServerSession } from "next-auth/next";
 import superjson from "superjson";
 import { ZodError } from "zod";
 
-import { auth } from "~/server/auth";
+import { authOptions } from "~/lib/auth-config";
 import { db } from "~/server/db";
 
 /**
@@ -27,7 +28,7 @@ import { db } from "~/server/db";
  * @see https://trpc.io/docs/server/context
  */
 export const createTRPCContext = async (opts: { headers: Headers }) => {
-  const session = await auth();
+  const session = await getServerSession(authOptions);
 
   return {
     db,
@@ -79,19 +80,10 @@ export const createCallerFactory = t.createCallerFactory;
 export const createTRPCRouter = t.router;
 
 /**
- * Middleware for timing procedure execution and adding an artificial delay in development.
- *
- * You can remove this if you don't like it, but it can help catch unwanted waterfalls by simulating
- * network latency that would occur in production but not in local development.
+ * Middleware for timing procedure execution.
  */
 const timingMiddleware = t.middleware(async ({ next, path }) => {
   const start = Date.now();
-
-  if (t._config.isDev) {
-    // artificial delay in dev
-    const waitMs = Math.floor(Math.random() * 400) + 100;
-    await new Promise((resolve) => setTimeout(resolve, waitMs));
-  }
 
   const result = await next();
 

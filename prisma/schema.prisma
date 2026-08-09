@@ -8,68 +8,141 @@ generator client {
 
 datasource db {
     provider = "postgresql"
-    // NOTE: When using mysql or sqlserver, uncomment the @db.Text annotations in model Account below
-    // Further reading:
-    // https://next-auth.js.org/adapters/prisma#create-the-prisma-schema
-    // https://www.prisma.io/docs/reference/api-reference/prisma-schema-reference#string
     url      = env("DATABASE_URL")
 }
 
-model Post {
-    id        Int      @id @default(autoincrement())
-    name      String
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+// Model names, table names (@@map) and every column name are kept identical to the Sequelize
+// app so the JSON reaching the UI is unchanged. Relation fields are deliberately capitalised
+// (Item / Member / Room / Borrow) to match the Sequelize association aliases the pages read.
 
-    createdBy   User   @relation(fields: [createdById], references: [id])
-    createdById String
+enum Role {
+    admin
+    faculty
+    staff
 
-    @@index([name])
-}
-
-// Necessary for Next auth
-model Account {
-    id                       String  @id @default(cuid())
-    userId                   String
-    type                     String
-    provider                 String
-    providerAccountId        String
-    refresh_token            String? // @db.Text
-    access_token             String? // @db.Text
-    expires_at               Int?
-    token_type               String?
-    scope                    String?
-    id_token                 String? // @db.Text
-    session_state            String?
-    user                     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-    refresh_token_expires_in Int?
-
-    @@unique([provider, providerAccountId])
-}
-
-model Session {
-    id           String   @id @default(cuid())
-    sessionToken String   @unique
-    userId       String
-    expires      DateTime
-    user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+    @@map("user_role")
 }
 
 model User {
-    id            String    @id @default(cuid())
-    name          String?
-    email         String?   @unique
-    emailVerified DateTime?
-    image         String?
-    accounts      Account[]
-    sessions      Session[]
-    posts         Post[]
+    id       Int    @id @default(autoincrement())
+    name     String @db.VarChar(50)
+    username String @unique @db.VarChar(50)
+    password String @db.VarChar(255)
+    role     Role   @default(admin)
+    /// 1=active, 2=inactive
+    status   Int    @default(1)
+
+    @@map("user")
 }
 
-model VerificationToken {
-    identifier String
-    token      String   @unique
-    expires    DateTime
+model Borrower {
+    id             Int    @id @default(autoincrement())
+    m_school_id    String @unique @db.VarChar(50)
+    m_fname        String @db.VarChar(50)
+    m_lname        String @db.VarChar(50)
+    m_gender       String @db.VarChar(10)
+    m_contact      String @db.VarChar(20)
+    m_department   String @db.VarChar(100)
+    m_year_section String @db.VarChar(50)
+    /// 1=student, 2=faculty, 3=staff
+    m_type         Int
+    m_password     String @db.VarChar(255)
+    /// 1=active, 2=inactive
+    m_status       Int    @default(1)
 
-    @@unique([identifier, token])
+    borrows Borrow[]
+    returns Return[]
+
+    @@map("borrower")
+}
+
+model Item {
+    id            Int     @id @default(autoincrement())
+    i_deviceID    String  @unique @db.VarChar(50)
+    i_model       String  @db.VarChar(100)
+    i_category    String  @db.VarChar(50)
+    i_brand       String  @db.VarChar(50)
+    i_description String  @db.Text
+    i_type        String  @db.VarChar(50)
+    item_rawstock Int     @default(1)
+    /// 1=available, 2=borrowed, 3=maintenance, 4=damaged
+    i_status      Int     @default(1)
+    i_mr          String  @db.VarChar(50)
+    i_price       Decimal @db.Decimal(10, 2)
+    i_photo       String  @default("default.jpg") @db.VarChar(255)
+    no_of_items   Int?
+    remarks       String? @db.Text
+
+    borrows Borrow[]
+    returns Return[]
+
+    @@map("item")
+}
+
+model Room {
+    id            Int      @id @default(autoincrement())
+    r_name        String   @db.VarChar(100)
+    r_description String?  @db.Text
+    /// 1=active, 2=inactive
+    r_status      Int      @default(1)
+    createdAt     DateTime @default(now())
+    updatedAt     DateTime @default(now()) @updatedAt
+
+    borrows Borrow[]
+    returns Return[]
+
+    @@map("room")
+}
+
+model Borrow {
+    id              Int       @id @default(autoincrement())
+    member_id       Int
+    item_id         Int
+    room_id         Int?
+    b_date_borrowed DateTime  @default(now())
+    b_date_returned DateTime?
+    b_due_date      DateTime
+    b_quantity      Int       @default(1)
+    /// 1=borrowed, 2=returned, 3=overdue
+    b_status        Int       @default(1)
+    b_purpose       String?   @db.Text
+    b_notes         String?   @db.Text
+
+    Member Borrower @relation(fields: [member_id], references: [id], onUpdate: Cascade, onDelete: Cascade)
+    Item   Item     @relation(fields: [item_id], references: [id], onUpdate: Cascade, onDelete: Cascade)
+    Room   Room?    @relation(fields: [room_id], references: [id], onUpdate: Cascade, onDelete: SetNull)
+    return Return?
+
+    @@map("borrow")
+}
+
+model Return {
+    id              Int      @id @default(autoincrement())
+    borrow_id       Int      @unique
+    member_id       Int
+    item_id         Int
+    room_id         Int?
+    r_date_returned DateTime @default(now())
+    r_quantity      Int      @default(1)
+    /// Condition of item when returned (Good, Damaged, Lost, etc.)
+    r_condition     String?
+    /// Additional notes about the return
+    r_notes         String?  @db.Text
+    /// Late fee if applicable
+    r_late_fee      Decimal  @default(0.00) @db.Decimal(10, 2)
+    /// Damage fee if applicable
+    r_damage_fee    Decimal  @default(0.00) @db.Decimal(10, 2)
+    createdAt       DateTime @default(now()) @map("created_at")
+    updatedAt       DateTime @default(now()) @updatedAt @map("updated_at")
+
+    Borrow Borrow   @relation(fields: [borrow_id], references: [id], onUpdate: Cascade, onDelete: Cascade)
+    Member Borrower @relation(fields: [member_id], references: [id], onUpdate: Cascade, onDelete: Cascade)
+    Item   Item     @relation(fields: [item_id], references: [id], onUpdate: Cascade, onDelete: Cascade)
+    Room   Room?    @relation(fields: [room_id], references: [id], onUpdate: Cascade, onDelete: SetNull)
+
+    @@index([borrow_id])
+    @@index([member_id])
+    @@index([item_id])
+    @@index([r_date_returned])
+    @@map("returns")
 }
