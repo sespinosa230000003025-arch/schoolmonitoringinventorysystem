@@ -212,7 +212,7 @@ const config = {
       "value": "prisma-client-js"
     },
     "output": {
-      "value": "/Users/nevram/New-Project/schoolmonitoringinventorysystem/generated/prisma",
+      "value": "/Users/nevram/Desktop/schoolmonitoringinventorysystem/generated/prisma",
       "fromEnvVar": null
     },
     "config": {
@@ -226,7 +226,7 @@ const config = {
       }
     ],
     "previewFeatures": [],
-    "sourceFilePath": "/Users/nevram/New-Project/schoolmonitoringinventorysystem/prisma/schema.prisma",
+    "sourceFilePath": "/Users/nevram/Desktop/schoolmonitoringinventorysystem/prisma/schema.prisma",
     "isCustomOutput": true
   },
   "relativeEnvPaths": {
@@ -240,6 +240,7 @@ const config = {
     "db"
   ],
   "activeProvider": "postgresql",
+  "postinstall": false,
   "inlineDatasources": {
     "db": {
       "url": {

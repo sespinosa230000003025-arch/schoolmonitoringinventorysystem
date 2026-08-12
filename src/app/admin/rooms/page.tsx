@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import Image from 'next/image';
 import { PlusIcon, MagnifyingGlassIcon, XMarkIcon, PencilIcon, EyeIcon } from '@heroicons/react/24/outline';
 import Layout from '../Layout';
+import ItemAvatar from '@/components/ui-components/item.avatar';
 import Alert from '../../../components/ui-components/alert';
 import { useAlert } from '../../../components/ui-components/useAlert';
 import { trpcClient } from '@/trpc/client';
@@ -643,18 +643,12 @@ export default function RoomsPage() {
                               <td className="px-4 py-4">
                                 <div className="flex items-center space-x-4">
                                   <div className="h-16 w-16 flex-shrink-0">
-                                    <Image
-                                      className="h-16 w-16 rounded-md object-cover border border-gray-300"
-                                      src={item.i_photo && item.i_photo !== 'default.jpg'
-                                        ? `/uploads/items/${item.i_photo}`
-                                        : '/uploads/items/default.jpg'}
+                                    <ItemAvatar
+                                      photo={item.i_photo}
+                                      brand={item.i_brand}
                                       alt={item.i_model}
-                                      width={64}
-                                      height={64}
-                                      onError={(e) => {
-                                        const target = e.target as HTMLImageElement;
-                                        target.src = '/uploads/items/default.jpg';
-                                      }}
+                                      className="h-16 w-16"
+                                      textClassName="text-xl"
                                     />
                                   </div>
                                   <div className="min-w-0">

@@ -14,6 +14,7 @@ export const env = createEnv({
     NEXTAUTH_URL: z.string().url().optional(),
     JWT_SECRET_KEY: z.string(),
     DATABASE_URL: z.string().url(),
+    UPLOADTHING_TOKEN: z.string(),
     NODE_ENV: z
       .enum(["development", "test", "production"])
       .default("development"),
@@ -37,6 +38,7 @@ export const env = createEnv({
     NEXTAUTH_URL: process.env.NEXTAUTH_URL,
     JWT_SECRET_KEY: process.env.JWT_SECRET_KEY,
     DATABASE_URL: process.env.DATABASE_URL,
+    UPLOADTHING_TOKEN: process.env.UPLOADTHING_TOKEN,
     NODE_ENV: process.env.NODE_ENV,
   },
   /**

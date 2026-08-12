@@ -6,6 +6,7 @@ import { Info, Copy, FileText, FileSpreadsheet, FileDown, Printer } from 'lucide
 import Layout from '../Layout';
 import ItemAvatar from '@/components/ui-components/item.avatar';
 import { trpcClient } from '@/trpc/client';
+import { useUploadThing } from '@/lib/uploadthing';
 
 interface Item {
   id: number;
@@ -68,7 +69,9 @@ export default function ItemsPage() {
   });
   const [selectedPhoto, setSelectedPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  // Uploads go straight to UploadThing from the browser; `itemImage` is the
+  // route defined in src/app/api/uploadthing/core.ts.
+  const { startUpload, isUploading: uploadingPhoto } = useUploadThing('itemImage');
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
   const [showQuantityModal, setShowQuantityModal] = useState(false);
@@ -163,10 +166,10 @@ export default function ItemsPage() {
         return;
       }
 
-      // Validate file size (5MB limit)
-      const maxSize = 5 * 1024 * 1024; // 5MB
+      // Validate file size (must match the limit on the UploadThing route)
+      const maxSize = 4 * 1024 * 1024; // 4MB
       if (file.size > maxSize) {
-        showNotification('error', 'File too large', 'Please select an image smaller than 5MB.');
+        showNotification('error', 'File too large', 'Please select an image smaller than 4MB.');
         return;
       }
 
@@ -181,32 +184,25 @@ export default function ItemsPage() {
     }
   };
 
+  /** Returns the public UploadThing URL of the photo, or null if the upload failed. */
   const uploadPhoto = async (): Promise<string | null> => {
     if (!selectedPhoto) return null;
 
-    setUploadingPhoto(true);
     try {
-      const formData = new FormData();
-      formData.append('photo', selectedPhoto);
+      const uploaded = await startUpload([selectedPhoto]);
+      const url = uploaded?.[0]?.ufsUrl;
 
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
-      });
-
-      const data = await response.json();
-      if (data.success) {
-        return data.filename;
-      } else {
-        showNotification('error', 'Upload failed', data.error || 'Failed to upload photo');
+      if (!url) {
+        showNotification('error', 'Upload failed', 'Failed to upload photo');
         return null;
       }
+
+      return url;
     } catch (error) {
       console.error('Photo upload error:', error);
-      showNotification('error', 'Upload failed', 'An error occurred while uploading the photo');
+      const message = error instanceof Error ? error.message : 'An error occurred while uploading the photo';
+      showNotification('error', 'Upload failed', message);
       return null;
-    } finally {
-      setUploadingPhoto(false);
     }
   };
 
@@ -215,12 +211,13 @@ export default function ItemsPage() {
     setSubmitting(true);
 
     try {
-      // Upload photo first if selected
-      let photoFilename = 'default.jpg';
+      // Upload photo first if selected. `default.jpg` is the "no photo" sentinel
+      // the schema defaults to; anything else is now an UploadThing URL.
+      let photo = 'default.jpg';
       if (selectedPhoto) {
-        const uploadedFilename = await uploadPhoto();
-        if (uploadedFilename) {
-          photoFilename = uploadedFilename;
+        const uploadedUrl = await uploadPhoto();
+        if (uploadedUrl) {
+          photo = uploadedUrl;
         } else {
           // Photo upload failed, don't proceed with item creation
           setSubmitting(false);
@@ -233,7 +230,7 @@ export default function ItemsPage() {
         item_rawstock: parseInt(formData.item_rawstock),
         i_price: parseFloat(formData.i_price),
         i_status: parseInt(formData.i_status),
-        i_photo: photoFilename
+        i_photo: photo
       });
 
       if (data.success) {
@@ -1122,7 +1119,7 @@ export default function ItemsPage() {
                           className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                         />
                         <p className="mt-1 text-xs text-gray-500">
-                          PNG, JPG, GIF up to 5MB. If you don&apos;t upload one, the item shows a
+                          PNG, JPG, GIF up to 4MB. If you don&apos;t upload one, the item shows a
                           letter avatar taken from the brand name.
                         </p>
                       </div>
