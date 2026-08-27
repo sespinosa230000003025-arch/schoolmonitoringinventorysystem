@@ -46,7 +46,15 @@ export const borrowsRouter = createTRPCRouter({
           ctx.db.borrow.findMany({
             where,
             include: {
-              Item: { select: { i_model: true, i_deviceID: true } },
+              // i_photo / i_brand drive the thumbnail shown next to an item in the UI.
+              Item: {
+                select: {
+                  i_model: true,
+                  i_deviceID: true,
+                  i_photo: true,
+                  i_brand: true,
+                },
+              },
               Member: { select: { m_fname: true, m_lname: true } },
               Room: { select: { r_name: true } },
             },

@@ -123,3 +123,19 @@ export const protectedProcedure = t.procedure
       },
     });
   });
+
+/**
+ * Admin-only procedure
+ *
+ * For actions faculty and staff must not be able to perform even by calling the API directly —
+ * setting return fees, for example. Hiding a control in the UI is not access control.
+ */
+export const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
+  if (ctx.session.user.role !== "admin") {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Only an admin can perform this action",
+    });
+  }
+  return next({ ctx });
+});

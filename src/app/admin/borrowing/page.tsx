@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { PlusIcon, MagnifyingGlassIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import Layout from '../Layout';
+import ItemAvatar from '@/components/ui-components/item.avatar';
 import { trpcClient } from '@/trpc/client';
 
 interface Borrow {
@@ -17,6 +18,8 @@ interface Borrow {
   Item?: {
     i_model: string;
     i_deviceID: string;
+    i_photo?: string | null;
+    i_brand?: string | null;
   };
   Member?: {
     m_fname: string;
@@ -281,9 +284,18 @@ export default function BorrowingPage() {
                     {borrows.map((borrow) => (
                       <tr key={borrow.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                          <div>
-                            <div className="font-medium">{borrow.Item?.i_model || 'N/A'}</div>
-                            <div className="text-xs text-gray-500">{borrow.Item?.i_deviceID || 'N/A'}</div>
+                          <div className="flex items-center gap-3">
+                            <ItemAvatar
+                              photo={borrow.Item?.i_photo}
+                              brand={borrow.Item?.i_brand}
+                              alt={borrow.Item?.i_model ?? ''}
+                              className="h-10 w-10 shrink-0"
+                              textClassName="text-sm"
+                            />
+                            <div>
+                              <div className="font-medium">{borrow.Item?.i_model || 'N/A'}</div>
+                              <div className="text-xs text-gray-500">{borrow.Item?.i_deviceID || 'N/A'}</div>
+                            </div>
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">

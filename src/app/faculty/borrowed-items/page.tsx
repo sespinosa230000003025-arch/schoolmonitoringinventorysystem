@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { MagnifyingGlassIcon, XMarkIcon, EyeIcon, ArrowUturnLeftIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
 import { Copy, FileText, FileSpreadsheet, FileDown, Printer } from 'lucide-react';
 import { trpcClient } from '@/trpc/client';
+import ItemAvatar from '@/components/ui-components/item.avatar';
 
 interface BorrowedItem {
     id: number;
@@ -21,6 +22,8 @@ interface BorrowedItem {
     Item: {
         i_model: string;
         i_deviceID: string;
+        i_photo?: string | null;
+        i_brand?: string | null;
     };
     Member: {
         m_fname: string;
@@ -55,11 +58,10 @@ export default function FacultyBorrowedItemsPage() {
         total: 0,
         totalPages: 0
     });
+    // Late and damage fees are deliberately absent: only an admin can set them.
     const [returnFormData, setReturnFormData] = useState({
         condition: 'Good',
-        notes: '',
-        lateFee: 0,
-        damageFee: 0
+        notes: ''
     });
 
     const fetchBorrowedItems = useCallback(async () => {
@@ -106,19 +108,14 @@ export default function FacultyBorrowedItemsPage() {
         setSelectedItem(item);
         setReturnFormData({
             condition: 'Good',
-            notes: '',
-            lateFee: 0,
-            damageFee: 0
+            notes: ''
         });
         setShowReturnModal(true);
     };
 
     const handleReturnFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
-        setReturnFormData(prev => ({
-            ...prev,
-            [name]: name === 'lateFee' || name === 'damageFee' ? parseFloat(value) || 0 : value
-        }));
+        setReturnFormData(prev => ({ ...prev, [name]: value }));
     };
 
     const handleConfirmReturn = () => {
@@ -134,9 +131,7 @@ export default function FacultyBorrowedItemsPage() {
             const data = await trpcClient.returns.create.mutate({
                 borrow_id: selectedItem.id,
                 r_condition: returnFormData.condition,
-                r_notes: returnFormData.notes,
-                r_late_fee: returnFormData.lateFee,
-                r_damage_fee: returnFormData.damageFee
+                r_notes: returnFormData.notes
             });
 
             if (data.success) {
@@ -550,7 +545,16 @@ export default function FacultyBorrowedItemsPage() {
                                                     {item.Item.i_deviceID}
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                                    {item.Item.i_model}
+                                                    <div className="flex items-center gap-2">
+                                                        <ItemAvatar
+                                                            photo={item.Item.i_photo}
+                                                            brand={item.Item.i_brand}
+                                                            alt={item.Item.i_model}
+                                                            className="h-9 w-9 shrink-0"
+                                                            textClassName="text-xs"
+                                                        />
+                                                        {item.Item.i_model}
+                                                    </div>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                                     {`${item.Member.m_fname} ${item.Member.m_lname}`}
@@ -687,7 +691,16 @@ export default function FacultyBorrowedItemsPage() {
 
                                     <div className="bg-gray-50 p-4 rounded-lg">
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Item Model</label>
-                                        <p className="text-sm text-gray-900 font-medium">{selectedItem.Item.i_model}</p>
+                                        <div className="flex items-center gap-3">
+                                            <ItemAvatar
+                                                photo={selectedItem.Item.i_photo}
+                                                brand={selectedItem.Item.i_brand}
+                                                alt={selectedItem.Item.i_model}
+                                                className="h-12 w-12 shrink-0"
+                                                textClassName="text-base"
+                                            />
+                                            <p className="text-sm text-gray-900 font-medium">{selectedItem.Item.i_model}</p>
+                                        </div>
                                     </div>
 
                                     <div className="bg-gray-50 p-4 rounded-lg">
@@ -786,14 +799,25 @@ export default function FacultyBorrowedItemsPage() {
                             <div className="space-y-4">
                                 <div className="bg-blue-50 p-4 rounded-lg">
                                     <h4 className="text-sm font-medium text-blue-900 mb-2">Item Information</h4>
-                                    <p className="text-sm text-blue-800">
-                                        <strong>Device ID:</strong> {selectedItem.Item.i_deviceID} |
-                                        <strong> Model:</strong> {selectedItem.Item.i_model} |
-                                        <strong> Quantity:</strong> {selectedItem.b_quantity}
-                                    </p>
-                                    <p className="text-sm text-blue-800">
-                                        <strong>Borrower:</strong> {`${selectedItem.Member.m_fname} ${selectedItem.Member.m_lname}`}
-                                    </p>
+                                    <div className="flex items-start gap-3">
+                                        <ItemAvatar
+                                            photo={selectedItem.Item.i_photo}
+                                            brand={selectedItem.Item.i_brand}
+                                            alt={selectedItem.Item.i_model}
+                                            className="h-16 w-16 shrink-0"
+                                            textClassName="text-xl"
+                                        />
+                                        <div className="min-w-0">
+                                            <p className="text-sm text-blue-800">
+                                                <strong>Device ID:</strong> {selectedItem.Item.i_deviceID} |
+                                                <strong> Model:</strong> {selectedItem.Item.i_model} |
+                                                <strong> Quantity:</strong> {selectedItem.b_quantity}
+                                            </p>
+                                            <p className="text-sm text-blue-800">
+                                                <strong>Borrower:</strong> {`${selectedItem.Member.m_fname} ${selectedItem.Member.m_lname}`}
+                                            </p>
+                                        </div>
+                                    </div>
                                 </div>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -812,34 +836,25 @@ export default function FacultyBorrowedItemsPage() {
                                         </select>
                                     </div>
 
+                                    {/* Fees are assessed by the admin, so they are display-only here. */}
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700">Late Fee ($)</label>
-                                        <input
-                                            type="number"
-                                            name="lateFee"
-                                            value={returnFormData.lateFee}
-                                            onChange={handleReturnFormChange}
-                                            min="0"
-                                            step="0.01"
-                                            className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                            placeholder="0.00"
-                                        />
+                                        <label className="block text-sm font-medium text-gray-700">Late Fee</label>
+                                        <p className="mt-1 block w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500">
+                                            0.00
+                                        </p>
                                     </div>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700">Damage Fee ($)</label>
-                                        <input
-                                            type="number"
-                                            name="damageFee"
-                                            value={returnFormData.damageFee}
-                                            onChange={handleReturnFormChange}
-                                            min="0"
-                                            step="0.01"
-                                            className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                            placeholder="0.00"
-                                        />
+                                        <label className="block text-sm font-medium text-gray-700">Damage Fee</label>
+                                        <p className="mt-1 block w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500">
+                                            0.00
+                                        </p>
                                     </div>
                                 </div>
+
+                                <p className="text-xs text-gray-500">
+                                    Late and damage fees are assessed by the admin after the item is returned.
+                                </p>
 
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700">Return Notes</label>
@@ -895,8 +910,7 @@ export default function FacultyBorrowedItemsPage() {
                                 </p>
                                 <div className="text-xs text-gray-400 mt-2 space-y-1">
                                     <p><strong>Condition:</strong> {returnFormData.condition}</p>
-                                    {returnFormData.lateFee > 0 && <p><strong>Late Fee:</strong> ${returnFormData.lateFee}</p>}
-                                    {returnFormData.damageFee > 0 && <p><strong>Damage Fee:</strong> ${returnFormData.damageFee}</p>}
+                                    <p>Any late or damage fee will be set by the admin.</p>
                                 </div>
                             </div>
                             <div className="flex items-center justify-center space-x-3 px-4 py-3">

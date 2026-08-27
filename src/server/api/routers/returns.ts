@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import {
+  adminProcedure,
   createTRPCRouter,
   protectedProcedure,
   publicProcedure,
@@ -50,7 +51,12 @@ export const returnsRouter = createTRPCRouter({
                 },
               },
               Item: {
-                select: { i_model: true, i_deviceID: true, i_brand: true },
+                select: {
+                  i_model: true,
+                  i_deviceID: true,
+                  i_brand: true,
+                  i_photo: true,
+                },
               },
               Member: {
                 select: { m_fname: true, m_lname: true, m_school_id: true },
@@ -191,6 +197,46 @@ export const returnsRouter = createTRPCRouter({
             error instanceof Error ? error.message : "Unknown error"
           }`,
         };
+      }
+    }),
+
+  // PATCH /api/returns/:id — fees only.
+  //
+  // Faculty and staff record the return itself; assessing what the borrower owes is an admin
+  // decision, so this is the one place late and damage fees can be changed.
+  updateFees: adminProcedure
+    .input(
+      z.object({
+        id: z.number(),
+        r_late_fee: z.number().min(0),
+        r_damage_fee: z.number().min(0),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const existing = await ctx.db.return.findUnique({
+          where: { id: input.id },
+        });
+        if (!existing) {
+          return { success: false as const, error: "Return record not found" };
+        }
+
+        const updated = await ctx.db.return.update({
+          where: { id: input.id },
+          data: {
+            r_late_fee: input.r_late_fee,
+            r_damage_fee: input.r_damage_fee,
+          },
+        });
+
+        return {
+          success: true as const,
+          data: serialize(updated),
+          message: "Fees updated successfully",
+        };
+      } catch (error) {
+        console.error("Update return fees error:", error);
+        return { success: false as const, error: "Failed to update fees" };
       }
     }),
 });

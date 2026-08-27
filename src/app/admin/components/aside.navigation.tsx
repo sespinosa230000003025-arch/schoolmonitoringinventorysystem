@@ -33,6 +33,11 @@ export default function AdminAsidecomponent() {
             icon: '📋'
         },
         {
+            href: '/admin/returned-items',
+            label: 'Returned Items',
+            icon: '✅'
+        },
+        {
             href: '/admin/rooms',
             label: 'Room',
             icon: '🏢'
