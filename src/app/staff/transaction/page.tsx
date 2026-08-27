@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { PlusIcon, MagnifyingGlassIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { trpcClient } from '@/trpc/client';
+import ItemPicker from '@/components/ui-components/item.picker';
 
 interface Borrow {
     id: number;
@@ -40,6 +41,7 @@ export default function BorrowingPage() {
     const [statusFilter, setStatusFilter] = useState('');
     const [showAddModal, setShowAddModal] = useState(false);
     const [submitting, setSubmitting] = useState(false);
+    const [itemError, setItemError] = useState('');
     const [items, setItems] = useState<any[]>([]);
     const [borrowers, setBorrowers] = useState<any[]>([]);
     const [rooms, setRooms] = useState<any[]>([]);
@@ -139,6 +141,13 @@ export default function BorrowingPage() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        // The item field is a photo picker rather than a native input, so it needs its own check.
+        if (!formData.b_itemid) {
+            setItemError('Please select an item.');
+            return;
+        }
+
         setSubmitting(true);
 
         try {
@@ -152,6 +161,7 @@ export default function BorrowingPage() {
 
             if (data.success) {
                 setShowAddModal(false);
+                setItemError('');
                 setFormData({
                     b_itemid: '',
                     b_memberid: '',
@@ -174,6 +184,7 @@ export default function BorrowingPage() {
 
     const handleAddClick = () => {
         fetchDropdownData();
+        setItemError('');
         setShowAddModal(true);
     };
 
@@ -400,22 +411,17 @@ export default function BorrowingPage() {
 
                             <form onSubmit={handleSubmit} className="space-y-4">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
+                                    <div className="md:col-span-2">
                                         <label className="block text-sm font-medium text-gray-700">Select Item</label>
-                                        <select
-                                            name="b_itemid"
+                                        <ItemPicker
+                                            items={items}
                                             value={formData.b_itemid}
-                                            onChange={handleInputChange}
-                                            required
-                                            className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                        >
-                                            <option value="">Choose an item...</option>
-                                            {items.map((item) => (
-                                                <option key={item.id} value={item.id}>
-                                                    {item.i_model} - {item.i_deviceID} (Stock: {item.item_rawstock})
-                                                </option>
-                                            ))}
-                                        </select>
+                                            onChange={(itemId) => {
+                                                setFormData(prev => ({ ...prev, b_itemid: itemId }));
+                                                setItemError('');
+                                            }}
+                                            error={itemError}
+                                        />
                                     </div>
 
                                     <div>
