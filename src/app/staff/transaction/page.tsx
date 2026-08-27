@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { PlusIcon, MagnifyingGlassIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { trpcClient } from '@/trpc/client';
 import ItemPicker from '@/components/ui-components/item.picker';
+import Alert from '@/components/ui-components/alert';
+import { useAlert } from '@/components/ui-components/useAlert';
 
 interface Borrow {
     id: number;
@@ -42,6 +44,7 @@ export default function BorrowingPage() {
     const [showAddModal, setShowAddModal] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [itemError, setItemError] = useState('');
+    const { alert, showSuccess, showError, hideAlert } = useAlert();
     const [items, setItems] = useState<any[]>([]);
     const [borrowers, setBorrowers] = useState<any[]>([]);
     const [rooms, setRooms] = useState<any[]>([]);
@@ -170,13 +173,13 @@ export default function BorrowingPage() {
                     b_returndate: ''
                 });
                 fetchBorrows(); // Refresh the list
-                alert('Borrow record created successfully!');
+                showSuccess('Borrow record created successfully', 'Success');
             } else {
-                alert('Error creating borrow record: ' + data.error);
+                showError(data.error ?? 'Error creating borrow record', 'Something went wrong');
             }
         } catch (error) {
             console.error('Error creating borrow record:', error);
-            alert('Error creating borrow record');
+            showError('Error creating borrow record', 'Something went wrong');
         } finally {
             setSubmitting(false);
         }
@@ -509,6 +512,15 @@ export default function BorrowingPage() {
                     </div>
                 </div>
             )}
+
+            {/* Toast: rendered last so it stays above the modal. */}
+            <Alert
+                type={alert.type}
+                title={alert.title}
+                message={alert.message}
+                isVisible={alert.isVisible}
+                onClose={hideAlert}
+            />
         </div>
     );
 }
