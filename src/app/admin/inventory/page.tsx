@@ -1,7 +1,19 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { DocumentArrowDownIcon, MagnifyingGlassIcon, PrinterIcon } from '@heroicons/react/24/outline'
+
 import Layout from '../Layout'
+import {
+    escapeHtml,
+    openPrintableReport,
+    peso,
+    photoCellHtml,
+    printColorStyles,
+} from '@/lib/print-report'
+import ItemAvatar from '@/components/ui-components/item.avatar'
+import Alert from '@/components/ui-components/alert'
+import { useAlert } from '@/components/ui-components/useAlert'
 import { trpcClient } from '@/trpc/client'
 
 interface InventoryItem {
@@ -32,6 +44,7 @@ export default function InventoryPage() {
         total: 0,
         totalPages: 0
     })
+    const { alert, showSuccess, showError, hideAlert } = useAlert()
 
     const fetchInventoryItems = useCallback(async () => {
         try {
@@ -69,14 +82,6 @@ export default function InventoryPage() {
         { key: 'maintenance', label: 'Maintenance', color: 'bg-blue-500 text-white', status: 3 },
         { key: 'damaged', label: 'Damaged', color: 'bg-blue-500 text-white', status: 4 },
         { key: 'total', label: 'Total Items', color: 'bg-blue-500 text-white', status: null }
-    ]
-
-    const exportButtons = [
-        { key: 'copy', label: 'Copy', color: 'bg-blue-500' },
-        { key: 'csv', label: 'CSV', color: 'bg-green-500' },
-        { key: 'excel', label: 'Excel', color: 'bg-emerald-600' },
-        { key: 'pdf', label: 'PDF', color: 'bg-red-500' },
-        { key: 'print', label: 'Print', color: 'bg-gray-600' }
     ]
 
     const getStatusLabel = (status: number) => {
@@ -123,10 +128,117 @@ export default function InventoryPage() {
         return statusMatch && searchMatch
     })
 
-    const handleExport = (type: string) => {
-        // Export functionality would be implemented here
-        alert(`Exporting as ${type}`)
+    const activeTabLabel = tabs.find(tab => tab.key === activeTab)?.label ?? 'Inventory'
+
+    const totalStock = filteredItems.reduce((sum, item) => sum + (item.item_rawstock || 0), 0)
+    const totalValue = filteredItems.reduce(
+        (sum, item) => sum + (Number(item.i_price) || 0) * (item.item_rawstock || 0),
+        0
+    )
+
+    /**
+     * Both buttons print the rows currently in the table — that is, the active category tab and
+     * the search term applied to it. PDF is the same document at a tighter size; the browser's
+     * print dialog is where "Save as PDF" lives.
+     */
+    const buildReportHtml = (compact: boolean) => {
+        const cellPadding = compact ? '6px' : '8px'
+        const fontSize = compact ? '10px' : '12px'
+        const photoSize = compact ? 36 : 44
+
+        const rows = filteredItems
+            .map(
+                item => `
+                <tr>
+                    <td class="photo">${photoCellHtml(item.i_photo, item.i_brand, item.i_model, photoSize)}</td>
+                    <td>${escapeHtml(item.i_deviceID)}</td>
+                    <td>${escapeHtml(item.i_model)}</td>
+                    <td>${escapeHtml(item.i_category)}</td>
+                    <td>${escapeHtml(item.i_brand)}</td>
+                    <td>${escapeHtml(item.item_rawstock)}</td>
+                    <td>${escapeHtml(getStatusLabel(item.i_status))}</td>
+                    <td>${escapeHtml(peso(Number(item.i_price) || 0))}</td>
+                </tr>`
+            )
+            .join('')
+
+        const emptyRow = `
+                <tr>
+                    <td colspan="8" style="text-align: center; color: #666;">No items in this category.</td>
+                </tr>`
+
+        return `
+            <html>
+                <head>
+                    <title>Inventory Report - ${escapeHtml(activeTabLabel)} - ${new Date().toLocaleDateString()}</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; margin: 20px; ${printColorStyles} }
+                        h1 { color: #333; text-align: center; margin-bottom: 4px; }
+                        h2 { color: #555; text-align: center; font-size: 14px; font-weight: normal; margin-top: 0; }
+                        .meta { font-size: ${fontSize}; color: #444; margin-bottom: 12px; }
+                        .meta span { margin-right: 16px; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: ${fontSize}; }
+                        th { background-color: #f8f9fa; border: 1px solid #ddd; padding: ${cellPadding}; font-weight: bold; text-align: left; }
+                        td { border: 1px solid #ddd; padding: ${cellPadding}; }
+                        td.photo { width: ${photoSize + 8}px; padding: 4px; }
+                        tr { page-break-inside: avoid; }
+                        @media print {
+                            body { margin: 10px; }
+                            thead { display: table-header-group; }
+                        }
+                    </style>
+                </head>
+                <body>
+                    <h1>Inventory Report</h1>
+                    <h2>Category: ${escapeHtml(activeTabLabel)}</h2>
+                    <div class="meta">
+                        <span><strong>Generated:</strong> ${new Date().toLocaleString()}</span>
+                        <span><strong>Records:</strong> ${filteredItems.length}</span>
+                        <span><strong>Total Stock:</strong> ${totalStock}</span>
+                        <span><strong>Total Value:</strong> ${peso(totalValue)}</span>
+                        ${searchTerm ? `<span><strong>Search:</strong> ${escapeHtml(searchTerm)}</span>` : ''}
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Photo</th>
+                                <th>Device ID</th>
+                                <th>Model</th>
+                                <th>Category</th>
+                                <th>Brand</th>
+                                <th>Stock</th>
+                                <th>Status</th>
+                                <th>Price</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rows || emptyRow}</tbody>
+                    </table>
+                </body>
+            </html>`
     }
+
+    const openReport = (compact: boolean, successText: string) => {
+        if (filteredItems.length === 0) {
+            showError(`There are no ${activeTabLabel} items to export.`, 'Nothing to export')
+            return
+        }
+
+        openPrintableReport({
+            html: buildReportHtml(compact),
+            onBlocked: () =>
+                showError('Please allow pop-ups for this site and try again.', 'Blocked by the browser'),
+            onReady: () => showSuccess(successText, 'Success'),
+            onError: (error) => {
+                console.error('Error building inventory report:', error)
+                showError('Failed to build the report', 'Something went wrong')
+            },
+        })
+    }
+
+    const handleExportPDF = () =>
+        openReport(true, `${activeTabLabel} report is ready — choose "Save as PDF" in the print dialog`)
+
+    const handlePrint = () => openReport(false, `${activeTabLabel} report sent to the print dialog`)
 
     return (
         <Layout>
@@ -153,28 +265,41 @@ export default function InventoryPage() {
                     ))}
                 </div>
 
-                {/* Export Buttons */}
-                <div className="flex flex-wrap gap-2">
-                    {exportButtons.map((button) => (
-                        <button
-                            key={button.key}
-                            onClick={() => handleExport(button.key)}
-                            className={`px-4 py-2 ${button.color} text-white text-sm rounded hover:opacity-90 transition-opacity`}
-                        >
-                            {button.label}
-                        </button>
-                    ))}
-                </div>
+                {/* Export Buttons — both act on the rows shown for the selected category */}
+                <div className="flex flex-wrap items-center gap-2">
+                    <button
+                        type="button"
+                        onClick={handleExportPDF}
+                        className="inline-flex items-center px-4 py-2 bg-red-500 text-white text-sm rounded hover:opacity-90 transition-opacity"
+                    >
+                        <DocumentArrowDownIcon className="mr-1.5 h-4 w-4" />
+                        PDF
+                    </button>
+                    <button
+                        type="button"
+                        onClick={handlePrint}
+                        className="inline-flex items-center px-4 py-2 bg-gray-600 text-white text-sm rounded hover:opacity-90 transition-opacity"
+                    >
+                        <PrinterIcon className="mr-1.5 h-4 w-4" />
+                        Print
+                    </button>
+                    <span className="text-sm text-gray-500">
+                        {activeTabLabel}: {filteredItems.length} {filteredItems.length === 1 ? 'record' : 'records'}
+                    </span>
 
-                {/* Search */}
-                <div className="flex justify-end">
-                    <input
-                        type="text"
-                        placeholder="Search"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
+                    {/* Search sits on the same row, pushed to the right edge */}
+                    <div className="relative w-full sm:ml-auto sm:w-96 lg:w-md">
+                        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                            <MagnifyingGlassIcon className="h-5 w-5 text-gray-400" />
+                        </div>
+                        <input
+                            type="text"
+                            placeholder="Search by model, category, brand or description..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="block w-full rounded-md border border-gray-300 py-3 pl-10 pr-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                    </div>
                 </div>
 
                 {/* Table */}
@@ -225,7 +350,16 @@ export default function InventoryPage() {
                                                 {item.i_deviceID}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                {item.i_model}
+                                                <div className="flex items-center gap-3">
+                                                    <ItemAvatar
+                                                        photo={item.i_photo}
+                                                        brand={item.i_brand}
+                                                        alt={item.i_model}
+                                                        className="h-10 w-10 shrink-0"
+                                                        textClassName="text-sm"
+                                                    />
+                                                    {item.i_model}
+                                                </div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                                 {item.i_category}
@@ -283,6 +417,14 @@ export default function InventoryPage() {
                         </button>
                     </div>
                 </div>
+
+                <Alert
+                    type={alert.type}
+                    title={alert.title}
+                    message={alert.message}
+                    isVisible={alert.isVisible}
+                    onClose={hideAlert}
+                />
             </div>
         </Layout>
     )

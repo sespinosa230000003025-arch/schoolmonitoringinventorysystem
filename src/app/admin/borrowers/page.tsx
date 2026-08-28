@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback } from 'react';
 
 import { PlusIcon, MagnifyingGlassIcon, XMarkIcon, PencilIcon, EyeIcon, UserMinusIcon, UserPlusIcon, ExclamationTriangleIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
-import { Copy, FileText, FileSpreadsheet, FileDown, Printer } from 'lucide-react';
+import { FileDown, Printer } from 'lucide-react';
+import { escapeHtml, openPrintableReport, printColorStyles } from '@/lib/print-report';
 import Layout from '../Layout';
 import { trpcClient } from '@/trpc/client';
 
@@ -247,307 +248,119 @@ export default function BorrowersPage() {
         }
     };
 
-    // Export Functions
-    const handleCopyData = async () => {
-        try {
-            const getTypeString = (type: number) => {
-                switch (type) {
-                    case 1: return 'Student';
-                    case 2: return 'Faculty';
-                    case 3: return 'Staff';
-                    default: return 'Unknown';
-                }
-            };
-
-            const tableData = borrowers.map(borrower => ({
-                'School ID': borrower.m_school_id,
-                'Name': `${borrower.m_fname} ${borrower.m_lname}`,
-                'Contact': borrower.m_contact,
-                'Department': borrower.m_department,
-                'Type': getTypeString(borrower.m_type),
-                'Status': borrower.m_status === 1 ? 'Active' : 'Inactive',
-                'Joined': borrower.createdAt ? new Date(borrower.createdAt).toLocaleDateString() : 'N/A'
-            }));
-
-            const headers = Object.keys(tableData[0] || {});
-            const csvContent = [
-                headers.join('\t'),
-                ...tableData.map(row => headers.map(header => row[header as keyof typeof row]).join('\t'))
-            ].join('\n');
-
-            await navigator.clipboard.writeText(csvContent);
-            setSuccessMessage('Borrowers data has been copied to clipboard');
-            setShowSuccessModal(true);
-        } catch (error) {
-            console.error('Error copying data:', error);
-            alert('Failed to copy data to clipboard');
+    // Export Functions — PDF and Print only; both render the rows currently in the table.
+    const getTypeString = (type: number) => {
+        switch (type) {
+            case 1: return 'Student';
+            case 2: return 'Faculty';
+            case 3: return 'Staff';
+            default: return 'Unknown';
         }
     };
 
-    const handleExportCSV = () => {
-        try {
-            const getTypeString = (type: number) => {
-                switch (type) {
-                    case 1: return 'Student';
-                    case 2: return 'Faculty';
-                    case 3: return 'Staff';
-                    default: return 'Unknown';
-                }
-            };
+    const buildReportHtml = (compact: boolean) => {
+        const cellPadding = compact ? '6px' : '8px';
+        const fontSize = compact ? '10px' : '12px';
 
-            const tableData = borrowers.map(borrower => ({
-                'School ID': borrower.m_school_id,
-                'Name': `${borrower.m_fname} ${borrower.m_lname}`,
-                'Contact': borrower.m_contact,
-                'Department': borrower.m_department || '',
-                'Type': getTypeString(borrower.m_type),
-                'Status': borrower.m_status === 1 ? 'Active' : 'Inactive',
-                'Joined': borrower.createdAt ? new Date(borrower.createdAt).toLocaleDateString() : ''
-            }));
-
-            const headers = Object.keys(tableData[0] || {});
-            const csvContent = [
-                headers.join(','),
-                ...tableData.map(row =>
-                    headers.map(header => {
-                        const value = row[header as keyof typeof row];
-                        return typeof value === 'string' ? `"${value.replace(/"/g, '""')}"` : value;
-                    }).join(',')
-                )
-            ].join('\n');
-
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            const url = URL.createObjectURL(blob);
-            link.setAttribute('href', url);
-            link.setAttribute('download', `borrowers_${new Date().toISOString().split('T')[0]}.csv`);
-            link.style.visibility = 'hidden';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-
-            setSuccessMessage('Borrowers data has been exported as CSV file');
-            setShowSuccessModal(true);
-        } catch (error) {
-            console.error('Error exporting CSV:', error);
-            alert('Failed to export CSV file');
-        }
-    };
-
-    const handleExportExcel = () => {
-        try {
-            const getTypeString = (type: number) => {
-                switch (type) {
-                    case 1: return 'Student';
-                    case 2: return 'Faculty';
-                    case 3: return 'Staff';
-                    default: return 'Unknown';
-                }
-            };
-
-            const tableData = borrowers.map(borrower => ({
-                'School ID': borrower.m_school_id,
-                'Name': `${borrower.m_fname} ${borrower.m_lname}`,
-                'Contact': borrower.m_contact,
-                'Department': borrower.m_department || '',
-                'Type': getTypeString(borrower.m_type),
-                'Status': borrower.m_status === 1 ? 'Active' : 'Inactive',
-                'Joined': borrower.createdAt ? new Date(borrower.createdAt).toLocaleDateString() : ''
-            }));
-
-            // Create a simple Excel-compatible format (Tab-separated values with .xls extension)
-            const headers = Object.keys(tableData[0] || {});
-            const excelContent = [
-                headers.join('\t'),
-                ...tableData.map(row => headers.map(header => row[header as keyof typeof row]).join('\t'))
-            ].join('\n');
-
-            const blob = new Blob([excelContent], { type: 'application/vnd.ms-excel' });
-            const link = document.createElement('a');
-            const url = URL.createObjectURL(blob);
-            link.setAttribute('href', url);
-            link.setAttribute('download', `borrowers_${new Date().toISOString().split('T')[0]}.xls`);
-            link.style.visibility = 'hidden';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-
-            setSuccessMessage('Borrowers data has been exported as Excel file');
-            setShowSuccessModal(true);
-        } catch (error) {
-            console.error('Error exporting Excel:', error);
-            alert('Failed to export Excel file');
-        }
-    };
-
-    const handleExportPDF = () => {
-        try {
-            const getTypeString = (type: number) => {
-                switch (type) {
-                    case 1: return 'Student';
-                    case 2: return 'Faculty';
-                    case 3: return 'Staff';
-                    default: return 'Unknown';
-                }
-            };
-
-            // Create a printable table for PDF
-            const printWindow = window.open('', '_blank');
-            if (!printWindow) {
-                alert('Please allow popups to export PDF');
-                return;
-            }
-
-            const tableRows = borrowers.map(borrower => `
+        const tableRows = borrowers
+            .map(
+                borrower => `
                 <tr>
-                    <td style="border: 1px solid #ddd; padding: 8px; font-size: 12px;">${borrower.m_school_id}</td>
-                    <td style="border: 1px solid #ddd; padding: 8px; font-size: 12px;">${borrower.m_fname} ${borrower.m_lname}</td>
-                    <td style="border: 1px solid #ddd; padding: 8px; font-size: 12px;">${borrower.m_contact}</td>
-                    <td style="border: 1px solid #ddd; padding: 8px; font-size: 12px;">${borrower.m_department || 'N/A'}</td>
-                    <td style="border: 1px solid #ddd; padding: 8px; font-size: 12px;">${getTypeString(borrower.m_type)}</td>
-                    <td style="border: 1px solid #ddd; padding: 8px; font-size: 12px;">${borrower.m_status === 1 ? 'Active' : 'Inactive'}</td>
-                    <td style="border: 1px solid #ddd; padding: 8px; font-size: 12px;">${borrower.createdAt ? new Date(borrower.createdAt).toLocaleDateString() : 'N/A'}</td>
-                </tr>
-            `).join('');
+                    <td>${escapeHtml(borrower.m_school_id)}</td>
+                    <td>${escapeHtml(`${borrower.m_fname} ${borrower.m_lname}`)}</td>
+                    <td>${escapeHtml(borrower.m_contact)}</td>
+                    <td>${escapeHtml(borrower.m_department || 'N/A')}</td>
+                    <td>${escapeHtml(getTypeString(borrower.m_type))}</td>
+                    <td>${escapeHtml(borrower.m_status === 1 ? 'Active' : 'Inactive')}</td>
+                    <td>${borrower.createdAt ? new Date(borrower.createdAt).toLocaleDateString() : 'N/A'}</td>
+                </tr>`
+            )
+            .join('');
 
-            printWindow.document.write(`
-                <html>
-                    <head>
-                        <title>Borrowers Report - ${new Date().toLocaleDateString()}</title>
-                        <style>
-                            body { font-family: Arial, sans-serif; margin: 20px; }
-                            h1 { color: #333; text-align: center; margin-bottom: 20px; }
-                            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-                            th { background-color: #f8f9fa; border: 1px solid #ddd; padding: 10px; font-size: 12px; font-weight: bold; }
-                            @media print { 
-                                body { margin: 0; }
-                                table { font-size: 10px; }
-                                th, td { padding: 4px; }
-                            }
-                        </style>
-                    </head>
-                    <body>
-                        <h1>School Borrowers Report</h1>
-                        <p><strong>Generated:</strong> ${new Date().toLocaleString()}</p>
-                        <p><strong>Total Borrowers:</strong> ${borrowers.length}</p>
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>School ID</th>
-                                    <th>Name</th>
-                                    <th>Contact</th>
-                                    <th>Department</th>
-                                    <th>Type</th>
-                                    <th>Status</th>
-                                    <th>Joined</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${tableRows}
-                            </tbody>
-                        </table>
-                    </body>
-                </html>
-            `);
+        const counts = borrowers.reduce(
+            (acc, borrower) => {
+                acc[getTypeString(borrower.m_type)] = (acc[getTypeString(borrower.m_type)] ?? 0) + 1;
+                return acc;
+            },
+            {} as Record<string, number>
+        );
 
-            printWindow.document.close();
-            printWindow.focus();
+        const breakdown = Object.entries(counts)
+            .map(([label, count]) => `<span><strong>${escapeHtml(label)}:</strong> ${count}</span>`)
+            .join('');
 
-            setTimeout(() => {
-                printWindow.print();
-                setSuccessMessage('PDF document is ready for printing/saving');
-                setShowSuccessModal(true);
-            }, 250);
-        } catch (error) {
-            console.error('Error exporting PDF:', error);
-            alert('Failed to export PDF');
-        }
+        return `
+            <html>
+                <head>
+                    <title>Borrowers Report - ${new Date().toLocaleDateString()}</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; margin: 20px; ${printColorStyles} }
+                        h1 { color: #333; text-align: center; margin-bottom: 4px; }
+                        .meta { font-size: ${fontSize}; color: #444; margin-bottom: 12px; }
+                        .meta span { margin-right: 16px; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: ${fontSize}; }
+                        th { background-color: #f8f9fa; border: 1px solid #ddd; padding: ${cellPadding}; font-weight: bold; text-align: left; }
+                        td { border: 1px solid #ddd; padding: ${cellPadding}; }
+                        tr { page-break-inside: avoid; }
+                        @media print {
+                            body { margin: 10px; }
+                            thead { display: table-header-group; }
+                        }
+                    </style>
+                </head>
+                <body>
+                    <h1>School Borrowers Report</h1>
+                    <div class="meta">
+                        <span><strong>Generated:</strong> ${new Date().toLocaleString()}</span>
+                        <span><strong>Records:</strong> ${borrowers.length}</span>
+                        ${breakdown}
+                        ${search ? `<span><strong>Search:</strong> ${escapeHtml(search)}</span>` : ''}
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>School ID</th>
+                                <th>Name</th>
+                                <th>Contact</th>
+                                <th>Department</th>
+                                <th>Type</th>
+                                <th>Status</th>
+                                <th>Joined</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${tableRows ||
+                                '<tr><td colspan="7" style="text-align: center; color: #666;">No borrowers to report.</td></tr>'}
+                        </tbody>
+                    </table>
+                </body>
+            </html>`;
     };
 
-    const handlePrint = () => {
-        try {
-            const getTypeString = (type: number) => {
-                switch (type) {
-                    case 1: return 'Student';
-                    case 2: return 'Faculty';
-                    case 3: return 'Staff';
-                    default: return 'Unknown';
-                }
-            };
-
-            const printWindow = window.open('', '_blank');
-            if (!printWindow) {
-                alert('Please allow popups to print');
-                return;
-            }
-
-            const tableRows = borrowers.map(borrower => `
-                <tr>
-                    <td style="border: 1px solid #ddd; padding: 8px;">${borrower.m_school_id}</td>
-                    <td style="border: 1px solid #ddd; padding: 8px;">${borrower.m_fname} ${borrower.m_lname}</td>
-                    <td style="border: 1px solid #ddd; padding: 8px;">${borrower.m_contact}</td>
-                    <td style="border: 1px solid #ddd; padding: 8px;">${borrower.m_department || 'N/A'}</td>
-                    <td style="border: 1px solid #ddd; padding: 8px;">${getTypeString(borrower.m_type)}</td>
-                    <td style="border: 1px solid #ddd; padding: 8px;">${borrower.m_status === 1 ? 'Active' : 'Inactive'}</td>
-                    <td style="border: 1px solid #ddd; padding: 8px;">${borrower.createdAt ? new Date(borrower.createdAt).toLocaleDateString() : 'N/A'}</td>
-                </tr>
-            `).join('');
-
-            printWindow.document.write(`
-                <html>
-                    <head>
-                        <title>Borrowers Report - ${new Date().toLocaleDateString()}</title>
-                        <style>
-                            body { font-family: Arial, sans-serif; margin: 20px; }
-                            h1 { color: #333; text-align: center; margin-bottom: 20px; }
-                            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-                            th { background-color: #f8f9fa; border: 1px solid #ddd; padding: 10px; font-weight: bold; }
-                            td { border: 1px solid #ddd; padding: 8px; }
-                            @media print { 
-                                body { margin: 10px; }
-                                h1 { font-size: 18px; }
-                                table { font-size: 12px; }
-                                th, td { padding: 4px; }
-                            }
-                        </style>
-                    </head>
-                    <body>
-                        <h1>School Borrowers Report</h1>
-                        <p><strong>Generated:</strong> ${new Date().toLocaleString()}</p>
-                        <p><strong>Total Borrowers:</strong> ${borrowers.length}</p>
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>School ID</th>
-                                    <th>Name</th>
-                                    <th>Contact</th>
-                                    <th>Department</th>
-                                    <th>Type</th>
-                                    <th>Status</th>
-                                    <th>Joined</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${tableRows}
-                            </tbody>
-                        </table>
-                    </body>
-                </html>
-            `);
-
-            printWindow.document.close();
-            printWindow.focus();
-
-            setTimeout(() => {
-                printWindow.print();
-                setSuccessMessage('Print dialog has been opened');
-                setShowSuccessModal(true);
-            }, 250);
-        } catch (error) {
-            console.error('Error printing:', error);
-            alert('Failed to open print dialog');
+    const openReport = (compact: boolean, successText: string) => {
+        if (borrowers.length === 0) {
+            alert('There are no borrowers in the table to export.');
+            return;
         }
+
+        openPrintableReport({
+            html: buildReportHtml(compact),
+            onBlocked: () => alert('Please allow pop-ups for this site and try again.'),
+            onReady: () => {
+                setSuccessMessage(successText);
+                setShowSuccessModal(true);
+            },
+            onError: (error) => {
+                console.error('Error building borrowers report:', error);
+                alert('Failed to build the report');
+            },
+        });
     };
+
+    const handleExportPDF = () =>
+        openReport(true, 'Choose "Save as PDF" in the print dialog to save the report.');
+
+    const handlePrint = () => openReport(false, 'Print dialog has been opened.');
 
     return (
         <Layout>
@@ -604,28 +417,7 @@ export default function BorrowersPage() {
                 <div className="bg-white shadow rounded-lg overflow-hidden">
                     <div className="px-4 py-5 sm:p-6">
                         {/* Export Buttons */}
-                        <div className="mb-4 flex flex-wrap gap-2">
-                            <button
-                                onClick={handleCopyData}
-                                className="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-md text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                            >
-                                <Copy className="h-3 w-3 mr-1" />
-                                Copy
-                            </button>
-                            <button
-                                onClick={handleExportCSV}
-                                className="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-md text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                            >
-                                <FileText className="h-3 w-3 mr-1" />
-                                CSV
-                            </button>
-                            <button
-                                onClick={handleExportExcel}
-                                className="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-md text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                            >
-                                <FileSpreadsheet className="h-3 w-3 mr-1" />
-                                Excel
-                            </button>
+                        <div className="mb-4 flex flex-wrap items-center gap-2">
                             <button
                                 onClick={handleExportPDF}
                                 className="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-md text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
@@ -640,6 +432,9 @@ export default function BorrowersPage() {
                                 <Printer className="h-3 w-3 mr-1" />
                                 Print
                             </button>
+                            <span className="text-xs text-gray-500">
+                                {borrowers.length} {borrowers.length === 1 ? 'record' : 'records'}
+                            </span>
                         </div>
                         {loading ? (
                             <div className="flex items-center justify-center h-32">

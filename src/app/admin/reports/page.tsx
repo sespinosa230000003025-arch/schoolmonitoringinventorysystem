@@ -3,6 +3,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import { DocumentArrowDownIcon, ChartBarIcon, CalendarIcon } from '@heroicons/react/24/outline';
 import Layout from '../Layout';
+import ItemAvatar from '@/components/ui-components/item.avatar';
+import Alert from '@/components/ui-components/alert';
+import { useAlert } from '@/components/ui-components/useAlert';
+import {
+  escapeHtml,
+  openPrintableReport,
+  photoCellHtml,
+  printColorStyles,
+} from '@/lib/print-report';
 import { trpcClient } from '@/trpc/client';
 
 interface ReportData {
@@ -16,6 +25,8 @@ interface ReportData {
     id: number;
     i_model: string;
     i_deviceID: string;
+    i_photo?: string | null;
+    i_brand?: string | null;
     borrowCount: number;
   }>;
   recentActivity: Array<{
@@ -38,6 +49,7 @@ export default function ReportsPage() {
     startDate: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
     endDate: new Date().toISOString().split('T')[0]
   });
+  const { alert, showSuccess, showError, hideAlert } = useAlert();
 
   const fetchReportData = useCallback(async () => {
     try {
@@ -61,32 +73,128 @@ export default function ReportsPage() {
     fetchReportData();
   }, [fetchReportData]);
 
-  const exportReport = async (type: 'pdf' | 'excel') => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(
-        `/api/reports/export?type=${type}&startDate=${dateRange.startDate}&endDate=${dateRange.endDate}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        }
-      );
-      
-      if (response.ok) {
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `report-${dateRange.startDate}-to-${dateRange.endDate}.${type === 'pdf' ? 'pdf' : 'xlsx'}`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-      }
-    } catch (error) {
-      console.error('Error exporting report:', error);
+  /**
+   * Builds the report in a print window rather than asking the server for a file: the old
+   * handler fetched /api/reports/export, a REST route that no longer exists, so nothing ever
+   * downloaded. The document mirrors what is on screen for the selected date range.
+   */
+  const buildReportHtml = (data: ReportData) => {
+    const summaryRows = [
+      ['Total Items', data.totalItems],
+      ['Total Members', data.totalMembers],
+      ['Total Rooms', data.totalRooms],
+      ['Active Borrows', data.activeBorrows],
+      ['Overdue Items', data.overdueBorrows],
+      ['Returned This Month', data.returnedThisMonth]
+    ]
+      .map(([label, value]) => `<tr><th class="label">${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`)
+      .join('');
+
+    const popularRows = data.popularItems
+      .map(
+        item => `
+        <tr>
+          <td class="photo">${photoCellHtml(item.i_photo, item.i_brand, item.i_model, 40)}</td>
+          <td>${escapeHtml(item.i_model)}</td>
+          <td>${escapeHtml(item.i_deviceID)}</td>
+          <td>${escapeHtml(item.borrowCount)}</td>
+        </tr>`
+      )
+      .join('');
+
+    const activityRows = data.recentActivity
+      .map(
+        activity => `
+        <tr>
+          <td>${new Date(activity.date).toLocaleDateString()}</td>
+          <td>${escapeHtml(activity.description)}</td>
+        </tr>`
+      )
+      .join('');
+
+    return `
+      <html>
+        <head>
+          <title>Inventory Report - ${dateRange.startDate} to ${dateRange.endDate}</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 20px; font-size: 11px; ${printColorStyles} }
+            h1 { color: #333; text-align: center; margin-bottom: 4px; }
+            h2 { color: #333; font-size: 14px; margin: 20px 0 6px; border-bottom: 1px solid #ddd; padding-bottom: 4px; }
+            .meta { color: #444; text-align: center; margin-bottom: 12px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+            th { background-color: #f8f9fa; border: 1px solid #ddd; padding: 6px; font-weight: bold; text-align: left; }
+            td { border: 1px solid #ddd; padding: 6px; }
+            td.photo { width: 48px; padding: 4px; }
+            th.label { width: 40%; }
+            .summary { width: 60%; }
+            tr { page-break-inside: avoid; }
+            @media print {
+              body { margin: 10px; }
+              thead { display: table-header-group; }
+            }
+          </style>
+        </head>
+        <body>
+          <h1>Property Monitoring Report</h1>
+          <div class="meta">
+            <strong>Period:</strong> ${new Date(dateRange.startDate).toLocaleDateString()} –
+            ${new Date(dateRange.endDate).toLocaleDateString()} &nbsp;·&nbsp;
+            <strong>Generated:</strong> ${new Date().toLocaleString()}
+          </div>
+
+          <h2>Summary</h2>
+          <table class="summary">${summaryRows}</table>
+
+          <h2>Most Borrowed Items</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Photo</th>
+                <th>Item</th>
+                <th>Device ID</th>
+                <th>Borrow Count</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${popularRows ||
+                '<tr><td colspan="4" style="text-align: center; color: #666;">No borrowing data for this period.</td></tr>'}
+            </tbody>
+          </table>
+
+          <h2>Recent Activity</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Activity</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${activityRows ||
+                '<tr><td colspan="2" style="text-align: center; color: #666;">No recent activity.</td></tr>'}
+            </tbody>
+          </table>
+        </body>
+      </html>`;
+  };
+
+  const handleExportPDF = () => {
+    if (!reportData) {
+      showError('Wait for the report data to finish loading.', 'Nothing to export');
+      return;
     }
+
+    openPrintableReport({
+      html: buildReportHtml(reportData),
+      onBlocked: () =>
+        showError('Please allow pop-ups for this site and try again.', 'Blocked by the browser'),
+      onReady: () =>
+        showSuccess('Choose "Save as PDF" in the print dialog to save the report', 'Success'),
+      onError: (error) => {
+        console.error('Error building report:', error);
+        showError('Failed to build the report', 'Something went wrong');
+      },
+    });
   };
 
   return (
@@ -100,17 +208,11 @@ export default function ReportsPage() {
               View analytics and generate reports for property monitoring.
             </p>
           </div>
-          <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none space-x-2">
+          <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
             <button
-              onClick={() => exportReport('excel')}
-              className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-            >
-              <DocumentArrowDownIcon className="-ml-1 mr-2 h-5 w-5" />
-              Export Excel
-            </button>
-            <button
-              onClick={() => exportReport('pdf')}
-              className="inline-flex items-center justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              onClick={handleExportPDF}
+              disabled={loading || !reportData}
+              className="inline-flex items-center justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <DocumentArrowDownIcon className="-ml-1 mr-2 h-5 w-5" />
               Export PDF
@@ -282,7 +384,16 @@ export default function ReportsPage() {
                       {reportData.popularItems.map((item) => (
                         <tr key={item.id}>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                            {item.i_model}
+                            <div className="flex items-center gap-3">
+                              <ItemAvatar
+                                photo={item.i_photo}
+                                brand={item.i_brand}
+                                alt={item.i_model}
+                                className="h-10 w-10 shrink-0"
+                                textClassName="text-sm"
+                              />
+                              {item.i_model}
+                            </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             {item.i_deviceID}
@@ -353,6 +464,14 @@ export default function ReportsPage() {
             <p className="text-sm text-gray-500">Failed to load report data.</p>
           </div>
         )}
+
+        <Alert
+          type={alert.type}
+          title={alert.title}
+          message={alert.message}
+          isVisible={alert.isVisible}
+          onClose={hideAlert}
+        />
       </div>
     </Layout>
   );

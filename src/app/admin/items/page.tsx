@@ -2,7 +2,14 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { PlusIcon, MagnifyingGlassIcon, XMarkIcon, CheckCircleIcon, ExclamationCircleIcon, HomeIcon, PencilIcon, TrashIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
-import { Info, Copy, FileText, FileSpreadsheet, FileDown, Printer } from 'lucide-react';
+import { Info, FileDown, Printer } from 'lucide-react';
+import {
+  escapeHtml,
+  openPrintableReport,
+  peso,
+  photoCellHtml,
+  printColorStyles,
+} from '@/lib/print-report';
 import Layout from '../Layout';
 import ItemAvatar from '@/components/ui-components/item.avatar';
 import { trpcClient } from '@/trpc/client';
@@ -427,270 +434,109 @@ export default function ItemsPage() {
     }
   };
 
-  // Export Functions
-  const handleCopyData = async () => {
-    try {
-      const tableData = items.map(item => ({
-        'Device ID': item.i_deviceID,
-        'Model': item.i_model,
-        'Category': item.i_category,
-        'Brand': item.i_brand,
-        'Type': item.i_type,
-        'Stock': item.item_rawstock,
-        'Price': `₱${item.i_price}`,
-        'Status': item.i_status === 1 ? 'New' : 'Old',
-        'MR Number': item.i_mr || 'N/A',
-        'Description': item.i_description || 'N/A'
-      }));
+  // Export Functions — PDF and Print only; both render the rows currently in the table.
+  const buildReportHtml = (compact: boolean) => {
+    const cellPadding = compact ? '6px' : '8px';
+    const fontSize = compact ? '10px' : '12px';
+    const photoSize = compact ? 36 : 44;
 
-      const headers = Object.keys(tableData[0] || {});
-      const csvContent = [
-        headers.join('\t'),
-        ...tableData.map(row => headers.map(header => row[header as keyof typeof row]).join('\t'))
-      ].join('\n');
+    const totalStock = items.reduce((sum, item) => sum + (item.item_rawstock || 0), 0);
+    const totalValue = items.reduce(
+      (sum, item) => sum + (Number(item.i_price) || 0) * (item.item_rawstock || 0),
+      0
+    );
 
-      await navigator.clipboard.writeText(csvContent);
-      showNotification('success', 'Data Copied', 'Items data has been copied to clipboard');
-    } catch (error) {
-      console.error('Error copying data:', error);
-      showNotification('error', 'Error', 'Failed to copy data to clipboard');
-    }
-  };
-
-  const handleExportCSV = () => {
-    try {
-      const tableData = items.map(item => ({
-        'Device ID': item.i_deviceID,
-        'Model': item.i_model,
-        'Category': item.i_category,
-        'Brand': item.i_brand,
-        'Type': item.i_type,
-        'Stock': item.item_rawstock,
-        'Price': item.i_price,
-        'Status': item.i_status === 1 ? 'New' : 'Old',
-        'MR Number': item.i_mr || '',
-        'Description': item.i_description || ''
-      }));
-
-      const headers = Object.keys(tableData[0] || {});
-      const csvContent = [
-        headers.join(','),
-        ...tableData.map(row =>
-          headers.map(header => {
-            const value = row[header as keyof typeof row];
-            return typeof value === 'string' ? `"${value.replace(/"/g, '""')}"` : value;
-          }).join(',')
-        )
-      ].join('\n');
-
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-      const url = URL.createObjectURL(blob);
-      link.setAttribute('href', url);
-      link.setAttribute('download', `items_${new Date().toISOString().split('T')[0]}.csv`);
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      showNotification('success', 'CSV Exported', 'Items data has been exported as CSV file');
-    } catch (error) {
-      console.error('Error exporting CSV:', error);
-      showNotification('error', 'Error', 'Failed to export CSV file');
-    }
-  };
-
-  const handleExportExcel = () => {
-    try {
-      const tableData = items.map(item => ({
-        'Device ID': item.i_deviceID,
-        'Model': item.i_model,
-        'Category': item.i_category,
-        'Brand': item.i_brand,
-        'Type': item.i_type,
-        'Stock': item.item_rawstock,
-        'Price': item.i_price,
-        'Status': item.i_status === 1 ? 'New' : 'Old',
-        'MR Number': item.i_mr || '',
-        'Description': item.i_description || ''
-      }));
-
-      // Create a simple Excel-compatible format (Tab-separated values with .xls extension)
-      const headers = Object.keys(tableData[0] || {});
-      const excelContent = [
-        headers.join('\t'),
-        ...tableData.map(row => headers.map(header => row[header as keyof typeof row]).join('\t'))
-      ].join('\n');
-
-      const blob = new Blob([excelContent], { type: 'application/vnd.ms-excel' });
-      const link = document.createElement('a');
-      const url = URL.createObjectURL(blob);
-      link.setAttribute('href', url);
-      link.setAttribute('download', `items_${new Date().toISOString().split('T')[0]}.xls`);
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      showNotification('success', 'Excel Exported', 'Items data has been exported as Excel file');
-    } catch (error) {
-      console.error('Error exporting Excel:', error);
-      showNotification('error', 'Error', 'Failed to export Excel file');
-    }
-  };
-
-  const handleExportPDF = () => {
-    try {
-      // Create a printable table for PDF
-      const printWindow = window.open('', '_blank');
-      if (!printWindow) {
-        showNotification('error', 'Error', 'Please allow popups to export PDF');
-        return;
-      }
-
-      const tableRows = items.map(item => `
+    const tableRows = items
+      .map(
+        item => `
         <tr>
-          <td style="border: 1px solid #ddd; padding: 8px; font-size: 12px;">${item.i_deviceID}</td>
-          <td style="border: 1px solid #ddd; padding: 8px; font-size: 12px;">${item.i_model}</td>
-          <td style="border: 1px solid #ddd; padding: 8px; font-size: 12px;">${item.i_category}</td>
-          <td style="border: 1px solid #ddd; padding: 8px; font-size: 12px;">${item.i_brand}</td>
-          <td style="border: 1px solid #ddd; padding: 8px; font-size: 12px;">${item.i_type}</td>
-          <td style="border: 1px solid #ddd; padding: 8px; font-size: 12px;">${item.item_rawstock}</td>
-          <td style="border: 1px solid #ddd; padding: 8px; font-size: 12px;">₱${item.i_price}</td>
-          <td style="border: 1px solid #ddd; padding: 8px; font-size: 12px;">${item.i_status === 1 ? 'New' : 'Old'}</td>
-        </tr>
-      `).join('');
+          <td class="photo">${photoCellHtml(item.i_photo, item.i_brand, item.i_model, photoSize)}</td>
+          <td>${escapeHtml(item.i_deviceID)}</td>
+          <td>${escapeHtml(item.i_model)}</td>
+          <td>${escapeHtml(item.i_category)}</td>
+          <td>${escapeHtml(item.i_brand)}</td>
+          <td>${escapeHtml(item.i_type)}</td>
+          <td>${escapeHtml(item.item_rawstock)}</td>
+          <td>${escapeHtml(peso(Number(item.i_price) || 0))}</td>
+          <td>${escapeHtml(item.i_status === 1 ? 'New' : 'Old')}</td>
+        </tr>`
+      )
+      .join('');
 
-      printWindow.document.write(`
-        <html>
-          <head>
-            <title>Items Report - ${new Date().toLocaleDateString()}</title>
-            <style>
-              body { font-family: Arial, sans-serif; margin: 20px; }
-              h1 { color: #333; text-align: center; margin-bottom: 20px; }
-              table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-              th { background-color: #f8f9fa; border: 1px solid #ddd; padding: 10px; font-size: 12px; font-weight: bold; }
-              @media print { 
-                body { margin: 0; }
-                table { font-size: 10px; }
-                th, td { padding: 4px; }
-              }
-            </style>
-          </head>
-          <body>
-            <h1>School Items Inventory Report</h1>
-            <p><strong>Generated:</strong> ${new Date().toLocaleString()}</p>
-            <p><strong>Total Items:</strong> ${items.length}</p>
-            <table>
-              <thead>
-                <tr>
-                  <th>Device ID</th>
-                  <th>Model</th>
-                  <th>Category</th>
-                  <th>Brand</th>
-                  <th>Type</th>
-                  <th>Stock</th>
-                  <th>Price</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${tableRows}
-              </tbody>
-            </table>
-          </body>
-        </html>
-      `);
-
-      printWindow.document.close();
-      printWindow.focus();
-
-      setTimeout(() => {
-        printWindow.print();
-        showNotification('success', 'PDF Ready', 'PDF document is ready for printing/saving');
-      }, 250);
-    } catch (error) {
-      console.error('Error exporting PDF:', error);
-      showNotification('error', 'Error', 'Failed to export PDF');
-    }
+    return `
+      <html>
+        <head>
+          <title>Items Report - ${new Date().toLocaleDateString()}</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 20px; ${printColorStyles} }
+            h1 { color: #333; text-align: center; margin-bottom: 4px; }
+            .meta { font-size: ${fontSize}; color: #444; margin-bottom: 12px; }
+            .meta span { margin-right: 16px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: ${fontSize}; }
+            th { background-color: #f8f9fa; border: 1px solid #ddd; padding: ${cellPadding}; font-weight: bold; text-align: left; }
+            td { border: 1px solid #ddd; padding: ${cellPadding}; }
+            td.photo { width: ${photoSize + 8}px; padding: 4px; }
+            tr { page-break-inside: avoid; }
+            @media print {
+              body { margin: 10px; }
+              thead { display: table-header-group; }
+            }
+          </style>
+        </head>
+        <body>
+          <h1>School Items Inventory Report</h1>
+          <div class="meta">
+            <span><strong>Generated:</strong> ${new Date().toLocaleString()}</span>
+            <span><strong>Records:</strong> ${items.length}</span>
+            <span><strong>Total Stock:</strong> ${totalStock}</span>
+            <span><strong>Total Value:</strong> ${peso(totalValue)}</span>
+            ${search ? `<span><strong>Search:</strong> ${escapeHtml(search)}</span>` : ''}
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Photo</th>
+                <th>Device ID</th>
+                <th>Model</th>
+                <th>Category</th>
+                <th>Brand</th>
+                <th>Type</th>
+                <th>Stock</th>
+                <th>Price</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${tableRows ||
+                '<tr><td colspan="9" style="text-align: center; color: #666;">No items to report.</td></tr>'}
+            </tbody>
+          </table>
+        </body>
+      </html>`;
   };
 
-  const handlePrint = () => {
-    try {
-      const printWindow = window.open('', '_blank');
-      if (!printWindow) {
-        showNotification('error', 'Error', 'Please allow popups to print');
-        return;
-      }
-
-      const tableRows = items.map(item => `
-        <tr>
-          <td style="border: 1px solid #ddd; padding: 8px;">${item.i_deviceID}</td>
-          <td style="border: 1px solid #ddd; padding: 8px;">${item.i_model}</td>
-          <td style="border: 1px solid #ddd; padding: 8px;">${item.i_category}</td>
-          <td style="border: 1px solid #ddd; padding: 8px;">${item.i_brand}</td>
-          <td style="border: 1px solid #ddd; padding: 8px;">${item.i_type}</td>
-          <td style="border: 1px solid #ddd; padding: 8px;">${item.item_rawstock}</td>
-          <td style="border: 1px solid #ddd; padding: 8px;">₱${item.i_price}</td>
-          <td style="border: 1px solid #ddd; padding: 8px;">${item.i_status === 1 ? 'New' : 'Old'}</td>
-        </tr>
-      `).join('');
-
-      printWindow.document.write(`
-        <html>
-          <head>
-            <title>Items Report - ${new Date().toLocaleDateString()}</title>
-            <style>
-              body { font-family: Arial, sans-serif; margin: 20px; }
-              h1 { color: #333; text-align: center; margin-bottom: 20px; }
-              table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-              th { background-color: #f8f9fa; border: 1px solid #ddd; padding: 10px; font-weight: bold; }
-              td { border: 1px solid #ddd; padding: 8px; }
-              @media print { 
-                body { margin: 10px; }
-                h1 { font-size: 18px; }
-                table { font-size: 12px; }
-                th, td { padding: 4px; }
-              }
-            </style>
-          </head>
-          <body>
-            <h1>School Items Inventory Report</h1>
-            <p><strong>Generated:</strong> ${new Date().toLocaleString()}</p>
-            <p><strong>Total Items:</strong> ${items.length}</p>
-            <table>
-              <thead>
-                <tr>
-                  <th>Device ID</th>
-                  <th>Model</th>
-                  <th>Category</th>
-                  <th>Brand</th>
-                  <th>Type</th>
-                  <th>Stock</th>
-                  <th>Price</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${tableRows}
-              </tbody>
-            </table>
-          </body>
-        </html>
-      `);
-
-      printWindow.document.close();
-      printWindow.focus();
-
-      setTimeout(() => {
-        printWindow.print();
-        showNotification('success', 'Print Ready', 'Print dialog has been opened');
-      }, 250);
-    } catch (error) {
-      console.error('Error printing:', error);
-      showNotification('error', 'Error', 'Failed to open print dialog');
+  const openReport = (compact: boolean, successTitle: string, successText: string) => {
+    if (items.length === 0) {
+      showNotification('error', 'Nothing to export', 'There are no items in the table.');
+      return;
     }
+
+    openPrintableReport({
+      html: buildReportHtml(compact),
+      onBlocked: () =>
+        showNotification('error', 'Blocked by the browser', 'Please allow pop-ups for this site and try again.'),
+      onReady: () => showNotification('success', successTitle, successText),
+      onError: (error) => {
+        console.error('Error building items report:', error);
+        showNotification('error', 'Error', 'Failed to build the report');
+      },
+    });
   };
+
+  const handleExportPDF = () =>
+    openReport(true, 'PDF Ready', 'Choose "Save as PDF" in the print dialog to save the report');
+
+  const handlePrint = () => openReport(false, 'Print Ready', 'Print dialog has been opened');
 
   return (
     <Layout>
@@ -752,28 +598,7 @@ export default function ItemsPage() {
         <div className="bg-white shadow rounded-lg overflow-hidden">
           <div className="px-4 py-5 sm:p-6">
             {/* Export Buttons */}
-            <div className="mb-4 flex flex-wrap gap-2">
-              <button
-                onClick={handleCopyData}
-                className="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-md text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                <Copy className="h-3 w-3 mr-1" />
-                Copy
-              </button>
-              <button
-                onClick={handleExportCSV}
-                className="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-md text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                <FileText className="h-3 w-3 mr-1" />
-                CSV
-              </button>
-              <button
-                onClick={handleExportExcel}
-                className="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-md text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                <FileSpreadsheet className="h-3 w-3 mr-1" />
-                Excel
-              </button>
+            <div className="mb-4 flex flex-wrap items-center gap-2">
               <button
                 onClick={handleExportPDF}
                 className="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-md text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
@@ -788,6 +613,9 @@ export default function ItemsPage() {
                 <Printer className="h-3 w-3 mr-1" />
                 Print
               </button>
+              <span className="text-xs text-gray-500">
+                {items.length} {items.length === 1 ? 'record' : 'records'}
+              </span>
             </div>
             {loading ? (
               <div className="flex items-center justify-center h-32">

@@ -53,7 +53,14 @@ export const reportsRouter = createTRPCRouter({
 
         const borrowedItemDetails = await ctx.db.item.findMany({
           where: { id: { in: mostBorrowedItems.map((row) => row.item_id) } },
-          select: { id: true, i_model: true, i_deviceID: true },
+          // i_photo / i_brand drive the thumbnail shown beside each popular item.
+          select: {
+            id: true,
+            i_model: true,
+            i_deviceID: true,
+            i_photo: true,
+            i_brand: true,
+          },
         });
 
         // Get most active borrowers (computed for parity with the REST route, which also
@@ -78,6 +85,8 @@ export const reportsRouter = createTRPCRouter({
             id: row.item_id,
             i_model: item?.i_model || "Unknown",
             i_deviceID: item?.i_deviceID || "Unknown",
+            i_photo: item?.i_photo ?? null,
+            i_brand: item?.i_brand ?? null,
             borrowCount: row._count.item_id,
           };
         });
