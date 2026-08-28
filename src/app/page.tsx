@@ -3,39 +3,29 @@
 import { useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import LandingPage from './landing.page';
+import FullScreenLoader from '@/components/ui-components/loader.screen';
 
 export default function HomePage() {
   const { data: session, status } = useSession();
   const router = useRouter();
 
   useEffect(() => {
-    if (status === 'loading') return; // Still loading
+    if (status !== 'authenticated') return;
 
-    if (session?.user?.role) {
-      // User is authenticated, redirect based on role
-      switch (session.user.role) {
-        case 'admin':
-          router.push('/admin');
-          break;
-        case 'staff':
-          router.push('/staff');
-          break;
-        case 'faculty':
-          router.push('/faculty');
-          break;
-        default:
-          router.push('/login');
-      }
-    } else {
-      // User is not authenticated, redirect to login
-      router.push('/login');
-    }
+    // Already signed in — send the user straight to their own dashboard.
+    const role = session?.user?.role;
+    const page =
+      role === 'admin' ? 'admin' : role === 'faculty' ? 'faculty' : 'staff';
+
+    router.push(`/${page}/dashboard`);
   }, [session, status, router]);
 
-  // Show loading spinner while redirecting
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
-    </div>
-  );
+  // Visitors who are not signed in get the landing page; everyone else sees a
+  // loader for the moment it takes to bounce them to their dashboard.
+  if (status === 'unauthenticated') {
+    return <LandingPage />;
+  }
+
+  return <FullScreenLoader />;
 }

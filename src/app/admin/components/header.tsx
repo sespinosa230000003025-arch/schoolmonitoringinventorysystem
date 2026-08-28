@@ -16,25 +16,25 @@ export default function AdminHeader() {
     }
 
     return (
-        <header className="bg-white border-b border-gray-200 px-6 py-3">
+        <header className="sticky top-0 z-30 bg-blue-600 border-b border-blue-700 shadow-sm px-6 py-3">
             <div className="flex justify-between items-center">
                 <div>
-                    <h1 className="text-2xl font-semibold text-gray-800"></h1>
+                    <h1 className="text-2xl font-semibold text-white"></h1>
                 </div>
 
                 <div className="relative">
                     <button
                         onClick={toggleDropdown}
-                        className="flex items-center space-x-3 text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 p-2"
+                        className="flex items-center space-x-3 text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-blue-600 p-2"
                     >
-                        <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white font-medium">
+                        <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center text-blue-600 font-semibold">
                             {session?.user?.name?.charAt(0).toUpperCase() || 'A'}
                         </div>
                         <div className="text-left">
-                            <div className="font-medium text-gray-700">{session?.user?.name || 'Admin'}</div>
-                            <div className="text-xs text-gray-500 capitalize">{session?.user?.role || 'admin'}</div>
+                            <div className="font-medium text-white">{session?.user?.name || 'Admin'}</div>
+                            <div className="text-xs text-blue-100 capitalize">{session?.user?.role || 'admin'}</div>
                         </div>
-                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-4 h-4 text-blue-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                         </svg>
                     </button>
