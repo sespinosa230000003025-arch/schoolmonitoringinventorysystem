@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import {
   CubeIcon,
   UsersIcon,
@@ -79,42 +80,42 @@ export default function Dashboard() {
       value: stats.totalItems,
       icon: CubeIcon,
       color: 'bg-blue-500',
-      href: '/dashboard/items'
+      href: '/admin/items'
     },
     {
       name: 'Total Borrowers',
       value: stats.totalBorrowers,
       icon: UsersIcon,
       color: 'bg-green-500',
-      href: '/dashboard/borrowers'
+      href: '/admin/borrowers'
     },
     {
       name: 'Total Rooms',
       value: stats.totalRooms,
       icon: BuildingOfficeIcon,
       color: 'bg-yellow-500',
-      href: '/dashboard/rooms'
+      href: '/admin/rooms'
     },
     {
       name: 'Active Borrows',
       value: stats.activeBorrows,
       icon: ClipboardDocumentListIcon,
       color: 'bg-purple-500',
-      href: '/dashboard/borrowing'
+      href: '/admin/borrowing?status=borrowed'
     },
     {
       name: 'Overdue Items',
       value: stats.overdueBorrows,
       icon: ExclamationTriangleIcon,
       color: 'bg-red-500',
-      href: '/dashboard/borrowing'
+      href: '/admin/borrowing?status=overdue'
     },
     {
       name: 'Returned This Month',
       value: stats.returnedThisMonth,
       icon: CheckCircleIcon,
       color: 'bg-emerald-500',
-      href: '/dashboard/borrowing'
+      href: '/admin/returned-items'
     }
   ];
 
@@ -253,10 +254,10 @@ export default function Dashboard() {
         {/* Stats Grid */}
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {statCards.map((card) => (
-            <div
+            <Link
               key={card.name}
-              className="relative bg-white pt-5 px-4 pb-12 sm:pt-6 sm:px-6 shadow rounded-lg overflow-hidden cursor-pointer hover:shadow-lg transition-shadow"
-              onClick={() => window.location.href = card.href}
+              href={card.href}
+              className="relative block bg-white pt-5 px-4 pb-12 sm:pt-6 sm:px-6 shadow rounded-lg overflow-hidden hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-shadow"
             >
               <dt>
                 <div className={`absolute ${card.color} rounded-md p-3`}>
@@ -276,7 +277,7 @@ export default function Dashboard() {
                   </span>
                 )}
               </dd>
-            </div>
+            </Link>
           ))}
         </div>
 

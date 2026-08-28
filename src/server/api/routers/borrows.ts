@@ -38,8 +38,28 @@ export const borrowsRouter = createTRPCRouter({
           ];
         }
 
+        // The UI sends named statuses ("borrowed", "returned", "overdue"); a bare
+        // parseInt on those yields NaN and matches nothing. Overdue mirrors the
+        // dashboard count in reports.summary: still out, and past its due date.
         if (status) {
-          where.b_status = parseInt(status);
+          switch (status) {
+            case "borrowed":
+              where.b_status = 1;
+              break;
+            case "returned":
+              where.b_status = 2;
+              break;
+            case "overdue":
+              where.b_status = 1;
+              where.b_due_date = { lt: new Date() };
+              break;
+            default: {
+              const numericStatus = parseInt(status, 10);
+              if (!Number.isNaN(numericStatus)) {
+                where.b_status = numericStatus;
+              }
+            }
+          }
         }
 
         const [rows, count] = await ctx.db.$transaction([

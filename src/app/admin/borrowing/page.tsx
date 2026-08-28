@@ -82,6 +82,15 @@ export default function BorrowingPage() {
     }
   }, [pagination.page, pagination.limit, search, statusFilter]);
 
+  // Seed the status filter from `?status=` so the dashboard stat cards can link
+  // straight to a filtered view (e.g. Overdue Items).
+  useEffect(() => {
+    const status = new URLSearchParams(window.location.search).get('status');
+    if (status) {
+      setStatusFilter(status);
+    }
+  }, []);
+
   useEffect(() => {
     fetchBorrows();
   }, [fetchBorrows]);
